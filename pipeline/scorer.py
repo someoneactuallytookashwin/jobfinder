@@ -20,8 +20,14 @@ _SCORING_PROMPT_PATH = os.path.join("prompts", "scoring_prompt.txt")
 def prefilter(jobs: list[dict]) -> list[dict]:
     """Keyword pre-filter before the LLM sees anything.
 
-    - Keep jobs whose title matches any SEARCH_KEYWORDS.
+    - Keep jobs whose title OR description matches any SEARCH_KEYWORDS.
     - Drop jobs whose title contains any EXCLUDE_KEYWORDS.
+
+    The include match looks at title + description because some sources (notably
+    the YC/HN thread) have messy free-text titles — the actual role lives in the
+    posting body, so a title-only match would wrongly drop them. The exclude
+    match stays title-only, so a body merely mentioning e.g. "intern program"
+    doesn't knock out an otherwise-good senior role.
 
     Cuts LLM call volume. If nothing matches the include list (e.g. sparse
     titles), falls back to the recency-ordered list so the run isn't empty.
@@ -32,9 +38,10 @@ def prefilter(jobs: list[dict]) -> list[dict]:
     kept: list[dict] = []
     for job in jobs:
         title = job["title"].lower()
+        haystack = title + " " + (job.get("description") or "").lower()
         if any(ex in title for ex in excludes):
             continue
-        if includes and not any(inc in title for inc in includes):
+        if includes and not any(inc in haystack for inc in includes):
             continue
         kept.append(job)
 

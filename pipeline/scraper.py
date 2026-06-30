@@ -355,7 +355,13 @@ def _first_href(cell: str) -> str:
 # YCombinator — via "Ask HN: Who is hiring?" (HN Algolia API, public)
 # ---------------------------------------------------------------------------
 
-_HN_SEARCH = "https://hn.algolia.com/api/v1/search?query=who%20is%20hiring&tags=story"
+# Newest-first list of the official "whoishiring" account's stories, so we always
+# grab the *latest* monthly "Who is hiring?" thread (relevance search can return a
+# popular old one whose comments are all outside the lookback window).
+_HN_SEARCH = (
+    "https://hn.algolia.com/api/v1/search_by_date?"
+    "tags=story,author_whoishiring&hitsPerPage=20"
+)
 _HN_ITEM = "https://hn.algolia.com/api/v1/items/{id}"
 
 
@@ -551,14 +557,41 @@ def scrape_all() -> list[dict]:
     deduped = _dedupe_by_url(raw)
     recent = _filter_by_recency(deduped)
     filtered = _prefilter_excluded(recent)
+    balanced = _interleave_by_source(filtered)
 
-    capped = filtered[: config.SCRAPE_LIMIT]
+    capped = balanced[: config.SCRAPE_LIMIT]
     logger.info(
         "Scrape pipeline: %d raw → %d deduped → %d recent → %d after exclude "
         "→ %d after cap.",
         len(raw), len(deduped), len(recent), len(filtered), len(capped),
     )
     return capped
+
+
+def _interleave_by_source(jobs: list[dict]) -> list[dict]:
+    """Round-robin jobs across their sources so the SCRAPE_LIMIT cap is shared
+    fairly. Otherwise whichever source runs first (e.g. LinkedIn) would fill the
+    entire cap and starve the others (e.g. YCombinator). Order within each source
+    is preserved.
+    """
+    from collections import OrderedDict
+
+    buckets: "OrderedDict[str, list[dict]]" = OrderedDict()
+    for job in jobs:
+        buckets.setdefault(job["source"], []).append(job)
+
+    iters = [iter(bucket) for bucket in buckets.values()]
+    out: list[dict] = []
+    while iters:
+        still_active = []
+        for it in iters:
+            try:
+                out.append(next(it))
+                still_active.append(it)
+            except StopIteration:
+                continue
+        iters = still_active
+    return out
 
 
 def _dedupe_by_url(jobs: list[dict]) -> list[dict]:
@@ -572,13 +605,24 @@ def _dedupe_by_url(jobs: list[dict]) -> list[dict]:
     return out
 
 
+# Sources whose postings bypass the LOOKBACK_HOURS window. The YC "Who is
+# hiring?" thread is monthly and gets nearly all its posts on day 1-2, so by
+# month-end none would survive a 1-2 week window — but the thread IS the current
+# month's opportunity set, so we treat all of it as current regardless of the
+# individual comment timestamps.
+_RECENCY_EXEMPT_SOURCES = {"ycombinator"}
+
+
 def _filter_by_recency(jobs: list[dict]) -> list[dict]:
-    """Keep jobs posted within LOOKBACK_HOURS. Jobs with no date are kept
-    (many sources don't expose reliable timestamps).
+    """Keep jobs posted within LOOKBACK_HOURS. Jobs with no date — or from a
+    recency-exempt source — are always kept.
     """
     cutoff = datetime.now(timezone.utc) - timedelta(hours=config.LOOKBACK_HOURS)
     out: list[dict] = []
     for job in jobs:
+        if job.get("source") in _RECENCY_EXEMPT_SOURCES:
+            out.append(job)
+            continue
         posted = job.get("posted_at")
         if not posted:
             out.append(job)

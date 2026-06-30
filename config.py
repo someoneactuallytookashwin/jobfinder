@@ -18,7 +18,12 @@ OLLAMA_BASE_URL = "http://localhost:11434"
 # --- Pipeline Settings ---
 SCRAPE_LIMIT = 50               # Total jobs to scrape per run
 BATCH_SIZE = 10                 # Resumes to tailor per batch trigger
-LOOKBACK_HOURS = 24             # Only jobs posted in last N hours
+# Only keep jobs posted in the last N hours. Applies to dated sources like
+# LinkedIn — set to 2 weeks for a healthy pool. (The YC/HN "Who is hiring?"
+# thread bypasses this window entirely; see _RECENCY_EXEMPT_SOURCES in
+# scraper.py — its posts cluster on day 1-2 so a time window can't capture it.)
+# Lower toward 24-72 if you only want very fresh LinkedIn postings.
+LOOKBACK_HOURS = 336            # 14 days
 TOP_N_TO_RANK = 30              # Jobs sent to LLM scorer after keyword filter
 
 # --- Job Search ---

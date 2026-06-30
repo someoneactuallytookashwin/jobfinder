@@ -2,7 +2,7 @@
 
 A local, run-it-yourself tool that helps you apply to jobs faster. It:
 
-1. **Scrapes** recent job postings (last 24 hours) from job boards.
+1. **Scrapes** recent job postings (last 2 weeks by default) from job boards.
 2. **Scores** each job from 1–10 against your résumé using a local AI model.
 3. **Ranks** them so you see the best matches first.
 4. **Tailors** your résumé to the top jobs — rewriting the summary, bullet points,
@@ -104,14 +104,14 @@ or gate their data). Verified live on 2026-06-30:
 |---|---|---|
 | **LinkedIn** | ✅ Works well | Uses LinkedIn's public guest endpoint (no login). The main workhorse. May occasionally rate-limit. |
 | **Simplify** | ✅ Works | Pulls SimplifyJobs' public GitHub lists. These skew **new-grad / SWE / hardware**, so "design engineer" surfaces chip-design roles (FPGA/ASIC) too — the scorer ranks those low. |
-| **YCombinator** | ⚠️ Limited | Scrapes YC's monthly "Ask HN: Who is hiring?" thread (Work at a Startup itself needs a login). Because the thread is **monthly** and the pipeline only keeps the last 24h by default, most of it gets filtered out mid-month — see the tip below. |
+| **YCombinator** | ✅ Works | Scrapes the **latest** YC "Ask HN: Who is hiring?" thread (Work at a Startup itself needs a login). Posts cluster on the thread's first day or two, so YC **bypasses the time window** entirely and is always treated as the current month's set. Free-text titles are messy, but the full posting is kept for scoring. |
 | **Indeed** | ❌ Effectively dead | Indeed **discontinued public RSS** (the feed returns HTTP 403). It's left enabled in case it's ever restored, but expect zero results from it. |
 | **Wellfound** | ⚠️ Best-effort | Login-gated + anti-bot. Usually returns little or nothing without an authenticated session. Requires `playwright install chromium`. |
 
-> 💡 **Tip — getting more from YCombinator:** if you want the YC/HN thread to
-> contribute more, raise `LOOKBACK_HOURS` in `config.py` (e.g. `168` for a week,
-> or `720` for the whole month). The trade-off is that LinkedIn/other sources will
-> then include older postings too.
+> 💡 **Tip — tuning the time window:** `LOOKBACK_HOURS` defaults to `336` (2 weeks)
+> and applies to dated sources like LinkedIn. Lower it (e.g. `72`) if you only want
+> very fresh postings, or raise it for a bigger pool. (YCombinator ignores this
+> window by design, so changing it won't affect YC results.)
 
 ### 4. Add your master résumé
 
@@ -187,9 +187,10 @@ you've pulled both models (`ollama list` to check). If Ollama runs elsewhere, se
 Usually one of:
 - You haven't changed `SEARCH_KEYWORDS` / `LOCATION` in `config.py` (see the section near
   the top), so the search is too narrow or wrong.
-- **The 24-hour window is cutting most results** — `LOOKBACK_HOURS` defaults to 24.
-  LinkedIn postings older than a day and almost the entire YC/HN monthly thread get
-  filtered out. Raise `LOOKBACK_HOURS` (e.g. `168` for a week) to capture more.
+- **The time window is cutting results** — `LOOKBACK_HOURS` defaults to `336` (2 weeks)
+  and applies to dated sources like LinkedIn. If you lowered it, older LinkedIn postings
+  get filtered out; raise it to capture more. (YCombinator bypasses this window, so it's
+  unaffected.)
 - **Don't expect anything from Indeed** — its public RSS is discontinued and returns
   HTTP 403 (you'll see a "malformed feed" warning in `pipeline.log`). This is normal;
   LinkedIn/Simplify/YC carry the load.

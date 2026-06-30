@@ -5,6 +5,11 @@ Given the job description and resume below, score the fit from 1-10.
 Rules:
 - Score based on skills match, seniority, and role alignment
 - Be strict. A 7 means genuinely strong match.
+- Note: "design engineer" can refer to two very different roles — mechanical/
+  hardware engineering (CAD, manufacturing, structural, FPGA/ASIC/RTL, circuits)
+  or product/software design engineering (UI design + frontend implementation).
+  The candidate is the latter (product/software). Score mechanical/hardware
+  engineering roles very low (1-2) regardless of how well the title matches.
 - Return ONLY valid JSON, no explanation outside the JSON
 
 Return this exact structure:
