@@ -25,10 +25,14 @@ TOP_N_TO_RANK = 30              # Jobs sent to LLM scorer after keyword filter
 # >>> CHANGE THESE THREE to match your own job search. <<<
 SEARCH_KEYWORDS = [
     "product designer",
+    "design engineer",
     "UX designer",
-    "senior product designer",
 ]
-LOCATION = "Remote"             # or "New York", "London" etc
+# Open to in-person roles anywhere in the US *and* remote. The scrapers take a
+# single location string, so "United States" is the widest net for a nationwide
+# search (Indeed returns both on-site US postings and US-tagged remote jobs).
+# If you ever want remote-only, set this to "Remote".
+LOCATION = "United States"
 EXCLUDE_KEYWORDS = [            # Filter out irrelevant titles
     "junior",
     "intern",
@@ -49,9 +53,18 @@ LLM_MAX_RETRIES = 3             # Retries per LLM call before giving up
 LLM_TIMEOUT = 120               # Seconds to wait for a single Ollama response
 
 # --- Sources ---
-# Toggle which sources to scrape
+# Toggle which sources to scrape. Reliability varies a LOT (see README
+# "Sources status"). Verified live 2026-06-30:
 SOURCES = {
+    # Indeed killed public RSS — the feed now returns HTTP 403 and yields
+    # nothing. Left on (it fails soft) in case it's ever restored, but don't
+    # count on it. LinkedIn is the real workhorse now.
     "indeed_rss": True,
-    "linkedin": False,      # Requires playwright, more fragile
-    "simplify": False,      # Requires playwright, more fragile
+    "linkedin": True,       # WORKS WELL — guest JSON endpoint, no login. May rate-limit.
+    "simplify": True,       # Works; SimplifyJobs GitHub lists skew new-grad/SWE/hardware.
+    "ycombinator": True,    # YC "Who is hiring?" HN thread. Monthly thread, so the
+                            # 24h LOOKBACK_HOURS filter drops most of it mid-month —
+                            # raise LOOKBACK_HOURS to capture more (see README).
+    "wellfound": True,      # Best-effort Playwright; usually empty without a login
+                            # session AND requires `playwright install chromium`.
 }

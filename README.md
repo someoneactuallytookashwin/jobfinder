@@ -71,7 +71,8 @@ pip install -r requirements.txt
 
 ### 2. Install the Playwright browser
 
-(Only needed if you enable the LinkedIn/Simplify sources later — harmless to do now.)
+Needed for the **Wellfound** source (it drives a headless browser). The other
+sources don't need it, but installing it now is harmless and avoids a warning.
 
 ```bash
 playwright install chromium
@@ -92,6 +93,25 @@ ollama pull qwen2.5:7b-instruct-q5_K_M
 
 > These exact model tags must match what's in [`config.py`](config.py)
 > (`SCORING_MODEL` and `TAILORING_MODEL`). If you pull a different tag, update config to match.
+
+### Sources status — read this so the results make sense
+
+All five sources you asked for are wired up and enabled in `config.py`, but they
+are **not equally reliable** (job boards actively fight scrapers, and some change
+or gate their data). Verified live on 2026-06-30:
+
+| Source | Status | Notes |
+|---|---|---|
+| **LinkedIn** | ✅ Works well | Uses LinkedIn's public guest endpoint (no login). The main workhorse. May occasionally rate-limit. |
+| **Simplify** | ✅ Works | Pulls SimplifyJobs' public GitHub lists. These skew **new-grad / SWE / hardware**, so "design engineer" surfaces chip-design roles (FPGA/ASIC) too — the scorer ranks those low. |
+| **YCombinator** | ⚠️ Limited | Scrapes YC's monthly "Ask HN: Who is hiring?" thread (Work at a Startup itself needs a login). Because the thread is **monthly** and the pipeline only keeps the last 24h by default, most of it gets filtered out mid-month — see the tip below. |
+| **Indeed** | ❌ Effectively dead | Indeed **discontinued public RSS** (the feed returns HTTP 403). It's left enabled in case it's ever restored, but expect zero results from it. |
+| **Wellfound** | ⚠️ Best-effort | Login-gated + anti-bot. Usually returns little or nothing without an authenticated session. Requires `playwright install chromium`. |
+
+> 💡 **Tip — getting more from YCombinator:** if you want the YC/HN thread to
+> contribute more, raise `LOOKBACK_HOURS` in `config.py` (e.g. `168` for a week,
+> or `720` for the whole month). The trade-off is that LinkedIn/other sources will
+> then include older postings too.
 
 ### 4. Add your master résumé
 
@@ -163,14 +183,19 @@ The Ollama server isn't running, or it's on a different address. Start the Ollam
 you've pulled both models (`ollama list` to check). If Ollama runs elsewhere, set
 `OLLAMA_BASE_URL` in `config.py` (or `.env`).
 
-**Empty scrape results ("No jobs found")**
+**Empty or thin scrape results ("No jobs found" / fewer than expected)**
 Usually one of:
 - You haven't changed `SEARCH_KEYWORDS` / `LOCATION` in `config.py` (see the section near
   the top), so the search is too narrow or wrong.
-- The job board returned nothing for the last 24 hours — try widening `LOOKBACK_HOURS`
-  in `config.py`, or loosening your keywords.
-- No source is enabled — check the `SOURCES` dict in `config.py` (`indeed_rss` is on by default).
-- Network/feed hiccup — check `pipeline.log` for the actual fetch error.
+- **The 24-hour window is cutting most results** — `LOOKBACK_HOURS` defaults to 24.
+  LinkedIn postings older than a day and almost the entire YC/HN monthly thread get
+  filtered out. Raise `LOOKBACK_HOURS` (e.g. `168` for a week) to capture more.
+- **Don't expect anything from Indeed** — its public RSS is discontinued and returns
+  HTTP 403 (you'll see a "malformed feed" warning in `pipeline.log`). This is normal;
+  LinkedIn/Simplify/YC carry the load.
+- **Wellfound returning nothing** is expected without a logged-in session (and you need
+  `playwright install chromium` for it to even launch).
+- Network/feed hiccup — check `pipeline.log`, which logs a per-source job count every run.
 
 **"Master resume not found"**
 You haven't put your résumé at `resume/master.tex` yet. See setup step 4.
