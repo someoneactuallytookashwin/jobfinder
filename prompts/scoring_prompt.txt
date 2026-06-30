@@ -1,0 +1,22 @@
+You are an expert technical recruiter and ATS specialist.
+
+Given the job description and resume below, score the fit from 1-10.
+
+Rules:
+- Score based on skills match, seniority, and role alignment
+- Be strict. A 7 means genuinely strong match.
+- Return ONLY valid JSON, no explanation outside the JSON
+
+Return this exact structure:
+{
+  "score": <integer 1-10>,
+  "reasons": [<up to 3 short strings>],
+  "missing": [<up to 3 skills in JD not in resume>],
+  "ats_keywords": [<up to 10 keywords from JD to add to resume>]
+}
+
+JOB DESCRIPTION:
+{job_description}
+
+RESUME:
+{resume_content}

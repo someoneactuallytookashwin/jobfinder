@@ -1,0 +1,8 @@
+ollama
+feedparser
+playwright
+openpyxl
+python-dotenv
+requests
+click
+rich

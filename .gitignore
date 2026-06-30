@@ -1,0 +1,29 @@
+# --- Data outputs (generated each run) ---
+data/*.json
+data/*.xlsx
+
+# --- Generated / tailored resumes ---
+resume/output/*
+
+# --- Personal resume (contains personal info) ---
+resume/master.tex
+
+# --- Secrets ---
+.env
+
+# --- Logs ---
+pipeline.log
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# --- LaTeX aux files ---
+*.aux
+*.log
+*.out
+
+# Keep empty tracked folders alive
+!**/.gitkeep
