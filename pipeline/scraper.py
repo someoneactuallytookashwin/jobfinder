@@ -395,9 +395,22 @@ def scrape_ycombinator() -> list[dict]:
         logger.warning("HN thread fetch failed: %s", exc)
         return []
 
+    # YC uses its own time window (config.YC_LOOKBACK_DAYS), not LOOKBACK_HOURS,
+    # because the thread's posts cluster on day 1-2.
+    cutoff_ts = (
+        datetime.now(timezone.utc) - timedelta(days=config.YC_LOOKBACK_DAYS)
+    ).timestamp()
+
     includes = [k.lower() for k in config.SEARCH_KEYWORDS] + ["design"]
     jobs: list[dict] = []
     for comment in thread.get("children", []):
+        if len(jobs) >= config.YC_MAX_POSTINGS:
+            break
+
+        created_i = comment.get("created_at_i")
+        if created_i and created_i < cutoff_ts:
+            continue  # outside YC's own lookback window
+
         text_html = comment.get("text") or ""
         text = _strip_tags(text_html)
         if not text:
@@ -427,7 +440,10 @@ def scrape_ycombinator() -> list[dict]:
             )
         )
 
-    logger.info("YCombinator (HN Who-is-hiring) produced %d raw jobs.", len(jobs))
+    logger.info(
+        "YCombinator (HN Who-is-hiring) produced %d jobs (last %d days, cap %d).",
+        len(jobs), config.YC_LOOKBACK_DAYS, config.YC_MAX_POSTINGS,
+    )
     return jobs
 
 
@@ -537,9 +553,22 @@ _SOURCE_FUNCS = {
 }
 
 
+#: YCombinator is treated as its own category. It's kept out of the main
+#: SCRAPE_LIMIT cap and the LOOKBACK_HOURS window (it has YC_LOOKBACK_DAYS /
+#: YC_MAX_POSTINGS instead) so it can be reviewed separately. It's still scored
+#: and ranked in the same pipeline, and lands on its own Excel tab.
+YC_SOURCE = "ycombinator"
+
+
 def scrape_all() -> list[dict]:
-    """Run every enabled source (isolated), dedupe by URL, filter by recency,
-    pre-filter by EXCLUDE_KEYWORDS, and cap at SCRAPE_LIMIT.
+    """Run every enabled source (isolated) and return the jobs to score.
+
+    Two tracks, combined at the end:
+      - Main sources: dedupe → LOOKBACK_HOURS recency → exclude → round-robin →
+        cap at SCRAPE_LIMIT.
+      - YCombinator: its own category — dedupe → exclude → cap at YC_MAX_POSTINGS
+        (its time window is applied inside scrape_ycombinator). Does NOT consume
+        the main SCRAPE_LIMIT.
     """
     raw: list[dict] = []
     for name, enabled in config.SOURCES.items():
@@ -555,17 +584,26 @@ def scrape_all() -> list[dict]:
             logger.error("Source '%s' crashed and was skipped: %s", name, exc)
 
     deduped = _dedupe_by_url(raw)
-    recent = _filter_by_recency(deduped)
+    yc_jobs = [j for j in deduped if j["source"] == YC_SOURCE]
+    main_jobs = [j for j in deduped if j["source"] != YC_SOURCE]
+
+    # Main track.
+    recent = _filter_by_recency(main_jobs)
     filtered = _prefilter_excluded(recent)
     balanced = _interleave_by_source(filtered)
+    main_capped = balanced[: config.SCRAPE_LIMIT]
 
-    capped = balanced[: config.SCRAPE_LIMIT]
+    # YCombinator track (own window already applied; just exclude + cap here).
+    yc_capped = _prefilter_excluded(yc_jobs)[: config.YC_MAX_POSTINGS]
+
+    combined = main_capped + yc_capped
     logger.info(
-        "Scrape pipeline: %d raw → %d deduped → %d recent → %d after exclude "
-        "→ %d after cap.",
-        len(raw), len(deduped), len(recent), len(filtered), len(capped),
+        "Scrape pipeline → main: %d raw → %d recent → %d after exclude → %d capped "
+        "(limit %d). YCombinator: %d → %d capped (limit %d). Combined: %d.",
+        len(main_jobs), len(recent), len(filtered), len(main_capped), config.SCRAPE_LIMIT,
+        len(yc_jobs), len(yc_capped), config.YC_MAX_POSTINGS, len(combined),
     )
-    return capped
+    return combined
 
 
 def _interleave_by_source(jobs: list[dict]) -> list[dict]:
@@ -605,24 +643,15 @@ def _dedupe_by_url(jobs: list[dict]) -> list[dict]:
     return out
 
 
-# Sources whose postings bypass the LOOKBACK_HOURS window. The YC "Who is
-# hiring?" thread is monthly and gets nearly all its posts on day 1-2, so by
-# month-end none would survive a 1-2 week window — but the thread IS the current
-# month's opportunity set, so we treat all of it as current regardless of the
-# individual comment timestamps.
-_RECENCY_EXEMPT_SOURCES = {"ycombinator"}
-
-
 def _filter_by_recency(jobs: list[dict]) -> list[dict]:
-    """Keep jobs posted within LOOKBACK_HOURS. Jobs with no date — or from a
-    recency-exempt source — are always kept.
+    """Keep jobs posted within LOOKBACK_HOURS. Jobs with no date are always kept.
+
+    YCombinator never reaches here — it's split out in scrape_all and uses its
+    own window (YC_LOOKBACK_DAYS).
     """
     cutoff = datetime.now(timezone.utc) - timedelta(hours=config.LOOKBACK_HOURS)
     out: list[dict] = []
     for job in jobs:
-        if job.get("source") in _RECENCY_EXEMPT_SOURCES:
-            out.append(job)
-            continue
         posted = job.get("posted_at")
         if not posted:
             out.append(job)

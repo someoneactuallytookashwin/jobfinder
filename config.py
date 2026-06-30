@@ -18,12 +18,11 @@ OLLAMA_BASE_URL = "http://localhost:11434"
 # --- Pipeline Settings ---
 SCRAPE_LIMIT = 50               # Total jobs to scrape per run
 BATCH_SIZE = 10                 # Resumes to tailor per batch trigger
-# Only keep jobs posted in the last N hours. Applies to dated sources like
-# LinkedIn — set to 2 weeks for a healthy pool. (The YC/HN "Who is hiring?"
-# thread bypasses this window entirely; see _RECENCY_EXEMPT_SOURCES in
-# scraper.py — its posts cluster on day 1-2 so a time window can't capture it.)
-# Lower toward 24-72 if you only want very fresh LinkedIn postings.
-LOOKBACK_HOURS = 336            # 14 days
+# Only keep jobs posted in the last N hours. Applies to all dated sources
+# (LinkedIn, Indeed). YCombinator does NOT use this — it has its own window in
+# the "YCombinator settings" section below, because its monthly thread's posts
+# cluster on day 1-2 and a 24h window would miss the whole thing.
+LOOKBACK_HOURS = 24             # last 24 hours
 TOP_N_TO_RANK = 30              # Jobs sent to LLM scorer after keyword filter
 
 # --- Job Search ---
@@ -67,9 +66,18 @@ SOURCES = {
     "indeed_rss": True,
     "linkedin": True,       # WORKS WELL — guest JSON endpoint, no login. May rate-limit.
     "simplify": True,       # Works; SimplifyJobs GitHub lists skew new-grad/SWE/hardware.
-    "ycombinator": True,    # YC "Who is hiring?" HN thread. Monthly thread, so the
-                            # 24h LOOKBACK_HOURS filter drops most of it mid-month —
-                            # raise LOOKBACK_HOURS to capture more (see README).
+    "ycombinator": True,    # YC "Who is hiring?" HN thread. Has its own time
+                            # window — see "YCombinator settings" below.
     "wellfound": True,      # Best-effort Playwright; usually empty without a login
                             # session AND requires `playwright install chromium`.
 }
+
+# --- YCombinator settings ---
+# YCombinator is configured separately from the other sources. Its postings live
+# in a single monthly "Ask HN: Who is hiring?" thread, and they cluster on the
+# thread's first day or two — so the global 24h LOOKBACK_HOURS would miss almost
+# all of it. These knobs give YC its own, wider window instead.
+YC_LOOKBACK_DAYS = 31           # Include thread comments from the last N days.
+                                # 31 ≈ the whole current monthly thread. Lower it
+                                # (e.g. 3) if you only want the freshest YC posts.
+YC_MAX_POSTINGS = 50            # Cap on postings pulled from the thread per run.

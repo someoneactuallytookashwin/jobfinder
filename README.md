@@ -2,7 +2,7 @@
 
 A local, run-it-yourself tool that helps you apply to jobs faster. It:
 
-1. **Scrapes** recent job postings (last 2 weeks by default) from job boards.
+1. **Scrapes** recent job postings (last 24 hours by default) from job boards.
 2. **Scores** each job from 1–10 against your résumé using a local AI model.
 3. **Ranks** them so you see the best matches first.
 4. **Tailors** your résumé to the top jobs — rewriting the summary, bullet points,
@@ -104,14 +104,15 @@ or gate their data). Verified live on 2026-06-30:
 |---|---|---|
 | **LinkedIn** | ✅ Works well | Uses LinkedIn's public guest endpoint (no login). The main workhorse. May occasionally rate-limit. |
 | **Simplify** | ✅ Works | Pulls SimplifyJobs' public GitHub lists. These skew **new-grad / SWE / hardware**, so "design engineer" surfaces chip-design roles (FPGA/ASIC) too — the scorer ranks those low. |
-| **YCombinator** | ✅ Works | Scrapes the **latest** YC "Ask HN: Who is hiring?" thread (Work at a Startup itself needs a login). Posts cluster on the thread's first day or two, so YC **bypasses the time window** entirely and is always treated as the current month's set. Free-text titles are messy, but the full posting is kept for scoring. |
+| **YCombinator** | ✅ Works — **separate category** | Scrapes the **latest** YC "Ask HN: Who is hiring?" thread (Work at a Startup itself needs a login). Treated as its own category: it has its own time window (`YC_LOOKBACK_DAYS`) and cap (`YC_MAX_POSTINGS`), doesn't count against the main 50-job limit, and is written to its own **"YCombinator" tab** in `results.xlsx` and shown as a separate table in `status`. Still scored/ranked in the same pipeline. Free-text titles are messy, but the full posting is kept for scoring. |
 | **Indeed** | ❌ Effectively dead | Indeed **discontinued public RSS** (the feed returns HTTP 403). It's left enabled in case it's ever restored, but expect zero results from it. |
 | **Wellfound** | ⚠️ Best-effort | Login-gated + anti-bot. Usually returns little or nothing without an authenticated session. Requires `playwright install chromium`. |
 
-> 💡 **Tip — tuning the time window:** `LOOKBACK_HOURS` defaults to `336` (2 weeks)
-> and applies to dated sources like LinkedIn. Lower it (e.g. `72`) if you only want
-> very fresh postings, or raise it for a bigger pool. (YCombinator ignores this
-> window by design, so changing it won't affect YC results.)
+> 💡 **Tip — tuning the time windows:** `LOOKBACK_HOURS` defaults to `24` and applies
+> to the main sources (LinkedIn, Indeed). Raise it (e.g. `72`, `168`) for a bigger pool.
+> **YCombinator is configured separately** in the "YCombinator settings" block of
+> `config.py`: `YC_LOOKBACK_DAYS` (default `31` ≈ the whole current monthly thread)
+> and `YC_MAX_POSTINGS`. Changing `LOOKBACK_HOURS` does not affect YC.
 
 ### 4. Add your master résumé
 
@@ -158,10 +159,12 @@ python main.py status
 
 ## What output to expect
 
-- **`data/results.xlsx`** — the master spreadsheet. New rows are *appended* every run
-  (it never overwrites old data). Top-10 jobs are highlighted **green**; jobs you've
-  tailored a résumé for are highlighted **blue**. Columns include score, reasons,
-  missing skills, ATS keywords, status, and the path to the tailored PDF.
+- **`data/results.xlsx`** — the master spreadsheet, with **two tabs**: a **Jobs** tab
+  for the main sources and a separate **YCombinator** tab so you can review YC on its
+  own. New rows are *appended* every run (it never overwrites old data). Top-10 jobs are
+  highlighted **green**; jobs you've tailored a résumé for are highlighted **blue**.
+  Columns include score, reasons, missing skills, ATS keywords, status, and the path to
+  the tailored PDF.
 - **`resume/output/batch_1/`, `batch_2/`, …** — your tailored résumés, one `.tex` and one
   `.pdf` per job, named like `acme_corp_senior_product_designer.pdf`.
 - **`data/jobs_raw.json`** / **`data/jobs_scored.json`** — the raw and scored job data
@@ -187,10 +190,9 @@ you've pulled both models (`ollama list` to check). If Ollama runs elsewhere, se
 Usually one of:
 - You haven't changed `SEARCH_KEYWORDS` / `LOCATION` in `config.py` (see the section near
   the top), so the search is too narrow or wrong.
-- **The time window is cutting results** — `LOOKBACK_HOURS` defaults to `336` (2 weeks)
-  and applies to dated sources like LinkedIn. If you lowered it, older LinkedIn postings
-  get filtered out; raise it to capture more. (YCombinator bypasses this window, so it's
-  unaffected.)
+- **The time window is cutting results** — `LOOKBACK_HOURS` defaults to `24` and applies
+  to the main sources (LinkedIn, Indeed). Raise it (e.g. `72`, `168`) to capture older
+  postings. (YCombinator has its own window, `YC_LOOKBACK_DAYS`, so this doesn't affect it.)
 - **Don't expect anything from Indeed** — its public RSS is discontinued and returns
   HTTP 403 (you'll see a "malformed feed" warning in `pipeline.log`). This is normal;
   LinkedIn/Simplify/YC carry the load.

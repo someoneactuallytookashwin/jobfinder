@@ -236,8 +236,21 @@ def _score_with_progress(jobs: list[dict], resume_content: str) -> list[dict]:
     return ranked
 
 
+YC_SOURCE = "ycombinator"
+
+
 def _print_rankings(jobs: list[dict], limit: int = 15) -> None:
-    table = Table(title="Job Rankings", show_lines=False, header_style="bold magenta")
+    """Print the main rankings and, separately, the YCombinator list."""
+    main_jobs = [j for j in jobs if j.get("source") != YC_SOURCE]
+    yc_jobs = [j for j in jobs if j.get("source") == YC_SOURCE]
+
+    _print_rankings_table(main_jobs, "Job Rankings (main sources)", limit)
+    if yc_jobs:
+        _print_rankings_table(yc_jobs, "YCombinator — reviewed separately", limit)
+
+
+def _print_rankings_table(jobs: list[dict], title: str, limit: int) -> None:
+    table = Table(title=title, show_lines=False, header_style="bold magenta")
     table.add_column("Rank", justify="right", style="cyan", no_wrap=True)
     table.add_column("Score", justify="right")
     table.add_column("Title", style="white")
